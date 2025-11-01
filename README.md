@@ -101,6 +101,71 @@ flowchart TD
 - [ ] Design scene abstraction JSON schema and storage strategy.
 - [ ] Outline API contracts for ingest, analytics, and reporting.
 
+## Prototype Metadata Analyzer Script
+To support early experimentation with imagery uploads, the repository now includes
+`analyze_upload.py`. The script validates that incoming files are PNG or JPEG
+images (based on both filename extension and file signature), extracts their
+metadata (including EXIF tags), and summarizes notable findings such as
+embedded comments or GPS coordinates.
+
+### Requirements
+- Python 3.9+
+- [Pillow](https://python-pillow.org/) for image decoding and EXIF handling:
+
+```bash
+pip install pillow
+```
+
+### Usage
+Run the analyzer from the repository root, passing the path to an uploaded
+image. By default it prints a human-readable summary; use `--json` to emit the
+structured metadata payload.
+
+```bash
+python analyze_upload.py /path/to/uploaded/image.jpg
+
+# Optional JSON output
+python analyze_upload.py /path/to/uploaded/image.jpg --json
+```
+
+If a non-PNG/JPEG file is provided—or if the file extension is spoofed but the
+binary content does not match a supported format—the script aborts with a
+descriptive error. When EXIF GPS metadata is available, it is converted to
+decimal latitude and longitude and highlighted in the summary. Ancillary image
+information such as ICC profiles or descriptions is also called out to aid
+environmental context triage.
+
+### Browser-based Analyzer
+
+For quick manual review you can launch a minimal Flask front-end that wraps the
+same validation and analysis routines used by the CLI tool.
+
+1. Install the dependencies:
+
+   ```bash
+   pip install flask pillow
+   ```
+
+2. Start the development server:
+
+   ```bash
+   FLASK_APP=app.py flask run
+   ```
+
+3. Visit <http://127.0.0.1:5000/> and upload a `.png` or `.jpeg` file. The UI
+   streams the image to the `/analyze` endpoint, reuses the hardened validation
+   logic, and renders the JSON response (including GPS coordinates when
+   available) directly in the browser.
+
+### Testing
+
+Lightweight regression tests are included to ensure the analyzer rejects invalid
+files and produces human-readable summaries for valid imagery. Run them with
+
+```bash
+pytest
+```
+
 ## References & Further Reading
 - NGA GEOINT standards documentation.
 - ESA Sen2Cor preprocessing guidelines for Sentinel imagery.

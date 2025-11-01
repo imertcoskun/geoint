@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GeoINT Metadata Analyzer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>GeoINT Metadata Analyzer</h1>
+      <p>Upload a PNG or JPEG file to inspect embedded metadata and GPS clues.</p>
+      <form id="upload-form">
+        <label class="file-input">
+          <span>Select imagery file</span>
+          <input id="image" name="image" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" required />
+        </label>
+        <button type="submit">Analyze</button>
+      </form>
+      <section id="status" aria-live="polite"></section>
+      <section id="result" hidden>
+        <h2>Analysis Result</h2>
+        <pre id="result-json"></pre>
+      </section>
+    </main>
+    <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+  </body>
+</html>
