@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional, Tuple
 
-from PIL import ExifTags, Image
+from PIL import ExifTags, Image, UnidentifiedImageError
 
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg"}
 
@@ -62,54 +62,65 @@ def _convert_gps_tags(gps_tags: Dict[str, Any]) -> Optional[Tuple[float, float]]
 
 def extract_metadata(path: Path) -> Dict[str, Any]:
     """Load the image and extract general and EXIF metadata."""
-    with Image.open(path) as img:
-        metadata: Dict[str, Any] = {
-            "format": img.format,
-            "mode": img.mode,
-            "size": {"width": img.width, "height": img.height},
-            "info": {},
-        }
+    try:
+        with Image.open(path) as img:
+            image_format = (img.format or "").upper()
+            if image_format not in {"PNG", "JPEG"}:
+                allowed = ", ".join(sorted(ext.upper() for ext in ALLOWED_EXTENSIONS))
+                raise ValueError(
+                    "File signature indicates unsupported format "
+                    f"'{image_format}'. Allowed formats: {allowed}."
+                )
 
-        # Basic image info (comments, ICC profiles, etc.)
-        for key, value in img.info.items():
-            if isinstance(value, bytes):
-                try:
-                    metadata["info"][key] = value.decode("utf-8")
-                except UnicodeDecodeError:
-                    metadata["info"][key] = value.hex()
-            else:
-                metadata["info"][key] = value
+            metadata: Dict[str, Any] = {
+                "format": img.format,
+                "mode": img.mode,
+                "size": {"width": img.width, "height": img.height},
+                "info": {},
+            }
 
-        # EXIF data (including GPS tags)
-        exif_raw = img.getexif()
-        if exif_raw:
-            exif: Dict[str, Any] = {}
-            gps_data: Dict[str, Any] = {}
-            for tag_id, value in exif_raw.items():
-                tag_name = ExifTags.TAGS.get(tag_id, tag_id)
-                if tag_name == "GPSInfo":
-                    for gps_key, gps_value in value.items():
-                        gps_tag = ExifTags.GPSTAGS.get(gps_key, gps_key)
-                        gps_data[gps_tag] = gps_value
+            # Basic image info (comments, ICC profiles, etc.)
+            for key, value in img.info.items():
+                if isinstance(value, bytes):
+                    try:
+                        metadata["info"][key] = value.decode("utf-8")
+                    except UnicodeDecodeError:
+                        metadata["info"][key] = value.hex()
                 else:
-                    if isinstance(value, bytes):
-                        try:
-                            exif[tag_name] = value.decode("utf-8")
-                        except UnicodeDecodeError:
-                            exif[tag_name] = value.hex()
-                    else:
-                        exif[tag_name] = value
+                    metadata["info"][key] = value
 
-            if gps_data:
-                exif["GPSInfo"] = gps_data
-                coords = _convert_gps_tags(gps_data)
-                if coords:
-                    exif["GPSCoordinates"] = {
-                        "latitude": coords[0],
-                        "longitude": coords[1],
-                    }
-            if exif:
-                metadata["exif"] = exif
+            # EXIF data (including GPS tags)
+            exif_raw = img.getexif()
+            if exif_raw:
+                exif: Dict[str, Any] = {}
+                gps_data: Dict[str, Any] = {}
+                for tag_id, value in exif_raw.items():
+                    tag_name = ExifTags.TAGS.get(tag_id, tag_id)
+                    if tag_name == "GPSInfo":
+                        for gps_key, gps_value in value.items():
+                            gps_tag = ExifTags.GPSTAGS.get(gps_key, gps_key)
+                            gps_data[gps_tag] = gps_value
+                    else:
+                        if isinstance(value, bytes):
+                            try:
+                                exif[tag_name] = value.decode("utf-8")
+                            except UnicodeDecodeError:
+                                exif[tag_name] = value.hex()
+                        else:
+                            exif[tag_name] = value
+
+                if gps_data:
+                    exif["GPSInfo"] = gps_data
+                    coords = _convert_gps_tags(gps_data)
+                    if coords:
+                        exif["GPSCoordinates"] = {
+                            "latitude": coords[0],
+                            "longitude": coords[1],
+                        }
+                if exif:
+                    metadata["exif"] = exif
+    except UnidentifiedImageError as exc:
+        raise ValueError("File is not a valid PNG or JPEG image.") from exc
 
     return metadata
 
@@ -131,12 +142,25 @@ def summarize_analysis(metadata: Dict[str, Any]) -> str:
         ]
         if comments:
             parts.append("Image comments/description -> " + "; ".join(comments))
+        else:
+            parts.append(
+                "Image ancillary info -> "
+                + "; ".join(f"{key}: {value}" for key, value in info.items())
+            )
 
     exif = metadata.get("exif", {})
     if exif:
         notable_keys = [
             key
-            for key in ("ImageDescription", "UserComment", "Artist", "Copyright")
+            for key in (
+                "ImageDescription",
+                "UserComment",
+                "Artist",
+                "Copyright",
+                "DateTimeOriginal",
+                "Make",
+                "Model",
+            )
             if key in exif
         ]
         for key in notable_keys:

@@ -104,8 +104,9 @@ flowchart TD
 ## Prototype Metadata Analyzer Script
 To support early experimentation with imagery uploads, the repository now includes
 `analyze_upload.py`. The script validates that incoming files are PNG or JPEG
-images, extracts their metadata (including EXIF tags), and summarizes notable
-findings such as embedded comments or GPS coordinates.
+images (based on both filename extension and file signature), extracts their
+metadata (including EXIF tags), and summarizes notable findings such as
+embedded comments or GPS coordinates.
 
 ### Requirements
 - Python 3.9+
@@ -127,9 +128,21 @@ python analyze_upload.py /path/to/uploaded/image.jpg
 python analyze_upload.py /path/to/uploaded/image.jpg --json
 ```
 
-If a non-PNG/JPEG file is provided, the script aborts with a descriptive error.
-When EXIF GPS metadata is available, it is converted to decimal latitude and
-longitude and highlighted in the summary.
+If a non-PNG/JPEG file is provided—or if the file extension is spoofed but the
+binary content does not match a supported format—the script aborts with a
+descriptive error. When EXIF GPS metadata is available, it is converted to
+decimal latitude and longitude and highlighted in the summary. Ancillary image
+information such as ICC profiles or descriptions is also called out to aid
+environmental context triage.
+
+### Testing
+
+Lightweight regression tests are included to ensure the analyzer rejects invalid
+files and produces human-readable summaries for valid imagery. Run them with
+
+```bash
+pytest
+```
 
 ## References & Further Reading
 - NGA GEOINT standards documentation.
